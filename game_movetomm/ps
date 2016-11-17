@@ -1,0 +1,7 @@
+grid[y][x]
+
+loop thru grud-x
+	loop thru grid-y
+		grid[grid-x][grid-y] = {}
+
+
