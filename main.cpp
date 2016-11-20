@@ -329,7 +329,7 @@ int placeObj(int y,int x,int what)
 
 
 bool on = true;
-std::chrono::milliseconds timespan(16);
+std::chrono::milliseconds timespan(66);
 int enemiehandler()
 {
     while(on)
@@ -350,7 +350,7 @@ int input()
     start_color();
     curs_set(0);
     int c;
-    render();
+    //render();
     while (on)
     {
         c = getch();
@@ -418,7 +418,7 @@ int input()
 
 
         }
-        render();
+        //render();
     }
     endwin();
     return 0;
