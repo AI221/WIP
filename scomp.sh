@@ -1,3 +1,3 @@
 #!/bin/sh
 echo -----------------------------------------------------------------------------------
-g++ -g main.cpp -lncurses -lpthread 
+g++ -std=gnu++11 -g main.cpp -lncurses -lpthread 

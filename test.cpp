@@ -15,8 +15,8 @@ int main(int argc, char *argv[])
                        mvprintw( 0, 0, "Viola !!! In color ...");
                             //attroff(COLOR_PAIR(1));
                             //attroff(COLOR_PAIR(1));
-                            attron(COLOR_PAIR(2));
-                            mvprintw(1,0,"hi...");
+                            attron(COLOR_PAIR(1));
+                            mvprintw(1,0,"%d",COLOR_PAIRS);
                             //attroff(COLOR_PAIR(1));
                                     getch();
                                         endwin();

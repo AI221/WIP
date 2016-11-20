@@ -1,7 +1,9 @@
 #include <ncurses.h>
 #include <string>
 #include <cstring>
-#include <unistd.h>
+#include <chrono>
+#include <thread>
+#include <cmath>
 
 
 //******Config definitions*********
@@ -44,6 +46,7 @@ bool id_isSolid[] = {
 int p_posx = 0;
 int p_posy = 0;
 int p_direction = 0;
+int p_health = 100;
 
 
 int inv[8] = {0,1,2,3,4,5};
@@ -55,7 +58,10 @@ int inv_highlighted = 0;
 bool getSolid(int y, int x);
 
 
-//Enemie stuff. Easier to be OO, and I need practice with C-style OO
+//Enemie stuff. Easier to be OO, and I need practice with C++-style OO
+
+int zombieDamage = 5;
+
 class Enemie
 {
     public:  
@@ -65,7 +71,7 @@ class Enemie
         Enemie(int y,int x)
         {
             py = y;
-            px = px;
+            px = x;
             ammount++;
             myDirection = 0;
         };
@@ -74,27 +80,27 @@ class Enemie
             switch(direction)
             {
                 case 0: //w
-                    if (!getSolid(p_posy-1,p_posx))
+                    if (!getSolid(py-1,px))
                     {
-                        p_posy--;
+                        py--;
                     }
                     break;
                 case 1: //s
-                    if (!getSolid(p_posy+1,p_posx))
+                    if (!getSolid(py+1,px))
                     {
-                        p_posy++;
+                        py++;
                     }
                     break;
                 case 2: //a
-                    if (!getSolid(p_posy,p_posx-1))
+                    if (!getSolid(py,px-1))
                     {
-                        p_posx--;
+                        px--;
                     }
                     break;
                 case 3: //d
-                    if (!getSolid(p_posy,p_posx+1))
+                    if (!getSolid(py,px+1))
                     {
-                        p_posx++;
+                        px++;
                     }
                     break;
 
@@ -102,22 +108,73 @@ class Enemie
             }
             myDirection = direction;
             
+            return 0;      
+        };
+        int render(int halfrow, int halfcol)
+        {
+            attron(COLOR_PAIR(52));
+            mvprintw(py-p_posy+halfrow,px-p_posx+halfcol,"O");
+            attroff(COLOR_PAIR(52));
+        };
+        int tick()
+        {
+            int diffy = p_posy-py;
+            int diffx = p_posx-px;
+            bool yIsGreater = std::abs(diffy) > std::abs(diffx);
+            if (diffy > 0 && yIsGreater)
+            {
+                if (!getSolid(py+1,px))
+                {
+                    py++;
+                } 
+            }
+            else if (diffy < 0 && yIsGreater)
+            {
+                if (!getSolid(py-1,px))
+                {
+                    py--;
+                }
+                
+            }
+            else if (diffx > 0 && !yIsGreater)
+            {
+                if (!getSolid(py,px+1))
+                {
+                    px++;
+                }
+            }
+            else
+            {
+                if (!getSolid(py,px-1))
+                {
+                    px--;
+                }
+            }
+                
+            if (std::abs(diffy) <= 1 && std::abs(diffx) <= 1)
+            {
+                p_health = p_health-zombieDamage;
+            }
+
             return 0;
         };
 
-        
+              
 
 
 
 };
 
-//int Enemie::ammount =0;
+int Enemie::ammount =0;
 
 
 
 
 //////
 
+Enemie* enemies[1] = {new Enemie(5,5)};
+
+//
 
 
 void blankFillWorld()
@@ -141,7 +198,8 @@ int render()
     init_pair(4,COLOR_BLACK,COLOR_BLACK);
     init_pair(5,COLOR_BLACK,COLOR_BLACK);
     init_pair(6,COLOR_MAGENTA,COLOR_GREEN);
-    init_pair(50,COLOR_BLACK,COLOR_BLACK);
+    init_pair(51,COLOR_BLACK,COLOR_BLACK); // colors after 51 reserved; ids restricted to <51
+    init_pair(52,COLOR_RED,COLOR_RED); //enenmie color
 
     int row,col;
     getmaxyx(stdscr,row,col);
@@ -158,7 +216,7 @@ int render()
             char realprint = '?';
             if ( realposy  < 0 || realposy > WORLD_SIZE_Y || realposx < 0 || realposx > WORLD_SIZE_X) 
             {
-                color = COLOR_PAIR(50);
+                color = COLOR_PAIR(51);
                 realprint = '~';
                 
             }
@@ -179,6 +237,12 @@ int render()
 
         }
     }
+    //Draw enemie
+
+    enemies[0]->render(halfrow,halfcol);
+
+
+
     char pchar = '?';
     switch (p_direction)
     {
@@ -203,6 +267,7 @@ int render()
         mvprintw(0,0,"p_posy: %d   ",p_posy);
         mvprintw(1,0,"p_posx: %d   ",p_posx);
         mvprintw(2,0,"inv_highlighted: %d   ",inv_highlighted);
+        mvprintw(3,0,"phealth: %d  ",p_health);
     #endif 
     refresh();
     return 0;
@@ -215,7 +280,7 @@ bool getOutOfWorld(int y,int x)
 
 bool getSolid(int y, int x)
 {
-    return ( getOutOfWorld(y,x)|| id_isSolid[grid[y][x]]); //This won't segfault because, if it's out of bounds, it will be true and C++ will stop checking further because the or statement is already satisfied.
+    return ( getOutOfWorld(y,x) || id_isSolid[grid[y][x]] || (p_posy == y && p_posx == x)); //This won't segfault because, if it's out of bounds, it will be true and C++ will stop checking further because the or statement is already satisfied.
 }
 
 int player_move(int direction)
@@ -262,18 +327,104 @@ int placeObj(int y,int x,int what)
     return 0;
 }
 
+
+bool on = true;
+std::chrono::milliseconds timespan(16);
+int enemiehandler()
+{
+    while(on)
+    {
+        enemies[0]->tick();
+        render();
+        std::this_thread::sleep_for(timespan);        
+    }
+    return 0;
+}
+
+int input()
+{
+    initscr();
+    raw();
+    keypad(stdscr,true);
+    noecho();
+    start_color();
+    curs_set(0);
+    int c;
+    render();
+    while (on)
+    {
+        c = getch();
+        switch(c)
+        {
+            case 119: //w
+                player_move(0);
+                break;
+            case 115: //s
+                player_move(1);
+                break;
+            case 97: //a
+                player_move(2);
+                break;
+            case 100: //d
+                player_move(3);
+                break;
+            case 32: //space
+                switch(p_direction)
+                {
+                    case(0):
+                        placeObj(p_posy-1,p_posx,inv[inv_highlighted]);
+                        break;
+                    case(1):
+                        placeObj(p_posy+1,p_posx,inv[inv_highlighted]);
+                        break;
+                    case(2):
+                        placeObj(p_posy,p_posx-1,inv[inv_highlighted]);
+                        break;
+                    case(3):
+                        placeObj(p_posy,p_posx+1,inv[inv_highlighted]);
+                        break;
+                }
+                break;
+            case 259: //up arrw
+                p_direction = 0;
+                break;
+            case 258: //down arrw
+                p_direction = 1;
+                break;
+            case 260: //left arrw
+                p_direction = 2;
+                break;
+            case 261: //right arrw
+                p_direction = 3;
+                break;
+            case 27: //escape
+                //make this show a menu. for now, it will quit
+                on = false;
+                break;
+            case 39: //TEMP
+                enemies[0]->move(1);
+                break;
+                
+            default:
+                //mvprintw(0,0,"%3d",c);
+                if (c >= 49 && c<= 57)
+                {
+                    int wouldbe_set = c-49;
+                    if (wouldbe_set <= inv_max)
+                    {
+                        inv_highlighted = wouldbe_set;
+                    }
+                }
+
+
+        }
+        render();
+    }
+    endwin();
+    return 0;
+}
 int main()
 {
-    // Colors for the IDs, initColor(id)
-
-    init_pair(1,COLOR_WHITE,COLOR_GREEN);
-    init_pair(2,COLOR_WHITE,COLOR_WHITE);
-    init_pair(3,COLOR_BLACK,COLOR_BLACK);
-    init_pair(4,COLOR_BLACK,COLOR_BLACK);
-    init_pair(5,COLOR_BLACK,COLOR_BLACK);
-    init_pair(6,COLOR_GREEN,COLOR_MAGENTA);
-
-    attron(COLOR_PAIR(3));//grid[realposy][realposx]));
     #ifdef UNITTEST
 
         //Variable setting
@@ -288,107 +439,14 @@ int main()
         std::cout << getSolid(1,0) << std::endl;
         std::cout << "5. Test solid at 0,0. Should be false." << std::endl;       
         std::cout << getSolid(0,0) << std::endl;
-
-
-
     #else
-        /////////
+        std::thread mainthread(input);
+        std::thread enemiethread(enemiehandler);
 
-        grid[3][3] = 2;
-        grid[3][4] = 2;
-        grid[3][5] = 2;
-        grid[3][6] = 2;
-        grid[4][3] = 2;
-        grid[5][3] = 2;
-        grid[6][3] = 2;
-        grid[3][6] = 2;
-        grid[4][6] = 2;
-        grid[5][6] = 2;
-        grid[6][6] = 2;
-        grid[130][40] = 2;
+        mainthread.join();
+        enemiethread.join();
 
-
-        ////////
-
-        initscr();
-        raw();
-        keypad(stdscr,true);
-        noecho();
-        start_color();
-        int c;
-        bool on = true;
-        while (on)
-        {
-            c = getch();
-            switch(c)
-            {
-                case 119: //w
-                    player_move(0);
-                    break;
-                case 115: //s
-                    player_move(1);
-                    break;
-                case 97: //a
-                    player_move(2);
-                    break;
-                case 100: //d
-                    player_move(3);
-                    break;
-                case 32: //space
-                    switch(p_direction)
-                    {
-                        case(0):
-                            placeObj(p_posy-1,p_posx,inv[inv_highlighted]);
-                            break;
-                        case(1):
-                            placeObj(p_posy+1,p_posx,inv[inv_highlighted]);
-                            break;
-                        case(2):
-                            placeObj(p_posy,p_posx-1,inv[inv_highlighted]);
-                            break;
-                        case(3):
-                            placeObj(p_posy,p_posx+1,inv[inv_highlighted]);
-                            break;
-                    }
-                    break;
-                case 259: //up arrw
-                    p_direction = 0;
-                    break;
-                case 258: //down arrw
-                    p_direction = 1;
-                    break;
-                case 260: //left arrw
-                    p_direction = 2;
-                    break;
-                case 261: //right arrw
-                    p_direction = 3;
-                    break;
-                case 27: //escape
-                    //make this show a menu. for now, it will quit
-                    on = false;
-                    break;
+        return 0;
                     
-                default:
-                    //mvprintw(0,0,"%3d",c);
-                    if (c >= 49 && c<= 57)
-                    {
-                        int wouldbe_set = c-49;
-                        if (wouldbe_set <= inv_max)
-                        {
-                            inv_highlighted = wouldbe_set;
-                        }
-                    }
-
-
-            }
-            render();
-        }
-        endwin();
-    #endif 
-    return 0;
-
-        
-
-
+    #endif
 }
-
