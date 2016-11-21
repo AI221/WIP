@@ -1,9 +1,8 @@
 #include <ncurses.h>
-#include <string>
-#include <cstring>
 #include <chrono>
 #include <thread>
 #include <cmath>
+#include <vector>
 
 
 //******Config definitions*********
@@ -24,7 +23,7 @@
 
 
 
-int grid[WORLD_SIZE_Y][WORLD_SIZE_X] = {};
+char grid[WORLD_SIZE_Y+1][WORLD_SIZE_X+1] = {};
 char id_char[] = {
     '.',
     ' ',
@@ -61,19 +60,26 @@ bool getSolid(int y, int x);
 //Enemie stuff. Easier to be OO, and I need practice with C++-style OO
 
 int zombieDamage = 5;
-
+int zombieTicksNeeded = 2;
+int zombieSight = 70;
 class Enemie
 {
     public:  
         int px,py,myDirection;
         static int ammount;
-        int player_move(int direction);
+        int ticksPassed = 0;
+        int health = 100;
         Enemie(int y,int x)
         {
             py = y;
             px = x;
             ammount++;
             myDirection = 0;
+        };
+        ~Enemie()
+        {
+            //rip
+            ammount--;
         };
         int move(int direction)
         {
@@ -118,43 +124,53 @@ class Enemie
         };
         int tick()
         {
-            int diffy = p_posy-py;
-            int diffx = p_posx-px;
-            bool yIsGreater = std::abs(diffy) > std::abs(diffx);
-            if (diffy > 0 && yIsGreater)
+            if (ticksPassed >= zombieTicksNeeded)
             {
-                if (!getSolid(py+1,px))
+                int diffy = p_posy-py;
+                int diffx = p_posx-px;
+                int adiffy = std::abs(diffy);
+                int adiffx = std::abs(diffx);
+                if (adiffy +  adiffx <= zombieSight) //this should be a radius
                 {
-                    py++;
-                } 
-            }
-            else if (diffy < 0 && yIsGreater)
-            {
-                if (!getSolid(py-1,px))
-                {
-                    py--;
+                    bool yIsGreater = adiffy > adiffx;
+                    if (diffy > 0 && yIsGreater)
+                    {
+                        if (!getSolid(py+1,px))
+                        {
+                            py++;
+                        } 
+                    }
+                    else if (diffy < 0 && yIsGreater)
+                    {
+                        if (!getSolid(py-1,px))
+                        {
+                            py--;
+                        }
+                        
+                    }
+                    else if (diffx > 0 && !yIsGreater)
+                    {
+                        if (!getSolid(py,px+1))
+                        {
+                            px++;
+                        }
+                    }
+                    else
+                    {
+                        if (!getSolid(py,px-1))
+                        {
+                            px--;
+                        }
+                    }
+                    //this is part of this if statement because this cannot be true without the above being true       
+                    if (adiffy <= 1 && diffx <= 1)
+                    {
+                        p_health = p_health-zombieDamage;
+                    }
                 }
-                
+                ticksPassed = -1;
             }
-            else if (diffx > 0 && !yIsGreater)
-            {
-                if (!getSolid(py,px+1))
-                {
-                    px++;
-                }
-            }
-            else
-            {
-                if (!getSolid(py,px-1))
-                {
-                    px--;
-                }
-            }
-                
-            if (std::abs(diffy) <= 1 && std::abs(diffx) <= 1)
-            {
-                p_health = p_health-zombieDamage;
-            }
+            ticksPassed++;
 
             return 0;
         };
@@ -172,10 +188,55 @@ int Enemie::ammount =0;
 
 //////
 
-Enemie* enemies[1] = {new Enemie(5,5)};
+//Enemie* enemies[1] = {new Enemie(5,5)};
+std::vector<Enemie*> enemies;
 
-//
+class bomb()
+{
+    public:
+        int px,py,myDirection
 
+        int tick()
+        {
+            
+
+            return 0;   
+        };
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int gameRound = 0;
+int ticksToNextRound = 900; //aprox. 1 minute
+void gameMasterTick()
+{
+    if (Enemie::ammount <= 0)
+    {
+        gameRound++;
+        ticksToNextRound = 900;
+    }
+    else
+    {
+    }
+        
+
+}
 
 void blankFillWorld()
 {
@@ -189,6 +250,10 @@ void blankFillWorld()
 }
 
 
+bool getOutOfWorld(int y,int x)
+{
+    return (y < 0 || y > WORLD_SIZE_Y || x < 0 || x > WORLD_SIZE_X);
+}
 
 int render()
 {
@@ -214,7 +279,7 @@ int render()
             int realposx = x+p_posx-halfcol;
             int color = COLOR_PAIR(1);
             char realprint = '?';
-            if ( realposy  < 0 || realposy > WORLD_SIZE_Y || realposx < 0 || realposx > WORLD_SIZE_X) 
+            if (getOutOfWorld(realposy,realposx)) 
             {
                 color = COLOR_PAIR(51);
                 realprint = '~';
@@ -239,8 +304,12 @@ int render()
     }
     //Draw enemie
 
-    enemies[0]->render(halfrow,halfcol);
+    //enemies[0]->render(halfrow,halfcol);
 
+    for (Enemie* i : enemies)
+    {
+        i->render(halfrow,halfcol);
+    }
 
 
     char pchar = '?';
@@ -272,15 +341,19 @@ int render()
     refresh();
     return 0;
 }
-bool getOutOfWorld(int y,int x)
-{
-    return (y < 0 || y > WORLD_SIZE_Y || x < 0 || x > WORLD_SIZE_X);
-}
 
 
 bool getSolid(int y, int x)
 {
-    return ( getOutOfWorld(y,x) || id_isSolid[grid[y][x]] || (p_posy == y && p_posx == x)); //This won't segfault because, if it's out of bounds, it will be true and C++ will stop checking further because the or statement is already satisfied.
+    bool isInEnemie = false;
+    for (Enemie* i : enemies)
+    {
+        if (i->py == y && i->px == x)
+        {
+            isInEnemie = true;
+        }
+    }
+    return ( isInEnemie || getOutOfWorld(y,x) || id_isSolid[grid[y][x]] || (p_posy == y && p_posx == x)); //This won't segfault because, if it's out of bounds, it will be true and C++ will stop checking further because the or statement is already satisfied.
 }
 
 int player_move(int direction)
@@ -322,21 +395,34 @@ int player_move(int direction)
 
 int placeObj(int y,int x,int what)
 {
-    if (!getOutOfWorld(y,x))
+    if (!(getOutOfWorld(y,x) || x==0 || y==0) )
         grid[y][x] = what;                   
     return 0;
 }
 
 
 bool on = true;
-std::chrono::milliseconds timespan(66);
+std::chrono::milliseconds ticktimespan(66);
 int enemiehandler()
 {
     while(on)
     {
-        enemies[0]->tick();
+        //enemies[0]->tick();
+        for (Enemie* i : enemies)
+        {
+            i->tick();
+        }
+        std::this_thread::sleep_for(ticktimespan);        
+    }
+    return 0;
+}
+std::chrono::milliseconds rendertimespan(33);
+int renderPeriodically()
+{
+    while (on)
+    {
         render();
-        std::this_thread::sleep_for(timespan);        
+        std::this_thread::sleep_for(rendertimespan);
     }
     return 0;
 }
@@ -401,9 +487,24 @@ int input()
                 //make this show a menu. for now, it will quit
                 on = false;
                 break;
-            case 39: //TEMP
-                enemies[0]->move(1);
-                break;
+            #ifdef DEBUG
+                case 262:
+                    p_posy=p_posy-100;
+                    break;
+                case 360:
+                    p_posy=p_posy+100;
+                    break;
+                case 330:
+                    p_posx=p_posx-100;
+                    break;
+                case 338:
+                    p_posx=p_posx+100;
+                    break;
+                case 39:
+                    enemies.reserve(1);
+                    enemies.push_back(new Enemie(p_posx+1,p_posy));
+                    break;
+            #endif
                 
             default:
                 //mvprintw(0,0,"%3d",c);
@@ -440,8 +541,17 @@ int main()
         std::cout << "5. Test solid at 0,0. Should be false." << std::endl;       
         std::cout << getSolid(0,0) << std::endl;
     #else
+        //zero-out the world grid
+        for (int y = 0;y < WORLD_SIZE_Y;y++)
+        {
+            for (int x = 0;x < WORLD_SIZE_X;x++)
+            {
+                grid[y][x] = 0;
+            }
+        }   
         std::thread mainthread(input);
         std::thread enemiethread(enemiehandler);
+        std::thread renderthread(renderPeriodically);
 
         mainthread.join();
         enemiethread.join();
